@@ -84,12 +84,12 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
             AnnotationAttributes clientAttrs = AnnotationAttributes.fromMap(
                     annotationMetadata.getAnnotationAttributes(RpcClient.class.getName()));
 
-            registerRpcClient(registry, annotationMetadata.getClassName(), clientAttrs);
+            registerClient(registry, annotationMetadata.getClassName(), clientAttrs);
         });
     }
 
-    private static void registerRpcClient(BeanDefinitionRegistry registry, String clientClassName,
-                                          AnnotationAttributes clientAttrs) {
+    private static void registerClient(BeanDefinitionRegistry registry, String clientClassName,
+                                       AnnotationAttributes clientAttrs) {
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient on the same getShortName in different packages)
         String beanName = ClassUtils.getShortName(clientClassName);
         BeanDefinition beanDefinition= BeanDefinitionBuilder.genericBeanDefinition(AmqpProxyFactoryBean.class)

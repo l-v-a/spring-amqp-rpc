@@ -7,6 +7,7 @@ import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.remoting.service.AmqpInvokerServiceExporter;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -37,7 +38,6 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
 
                 RpcServer rpcServer = AnnotationUtils.findAnnotation(beanClass, RpcServer.class);
                 Map<String, Object> attrs = AnnotationUtils.getAnnotationAttributes(rpcServer);
-                // Assert.isTrue(serverInterface.isInterface(), "@RpcServer  must be applied to interfaced only");
                 registerServer((BeanDefinitionRegistry) beanFactory, serverInterface, beanName);
             }
         }
@@ -47,48 +47,67 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
     private void registerServer(BeanDefinitionRegistry registry,
                                 Class<?> serverInterface, String serverBeanName) {
 
-        String suffix = ClassUtils.getShortName(serverInterface); // TODO: support package name
         String exchangeBeanName = "exchange"; // TODO: declare
 
-        // queue
+        String queueBeanName = registerQueue(registry, serverInterface);
+        registerBinding(registry, serverInterface, queueBeanName, exchangeBeanName);
+        String exporterBeanName = registerExporter(registry, serverInterface, serverBeanName);
+        registerListener(registry, serverInterface, queueBeanName, exporterBeanName);
+    }
+
+    private static String registerQueue(BeanDefinitionRegistry registry, Class<?> serverInterface) {
         // TODO: read params from config
-        String queueBeanName = String.format("queue_%s", suffix);
+        String queueBeanName = formatBeanName("queue", serverInterface);
         BeanDefinitionBuilder builder = builder = BeanDefinitionBuilder.genericBeanDefinition(Queue.class,
                 () -> new Queue(serverInterface.getSimpleName(), true, false, false));
         registry.registerBeanDefinition(queueBeanName, builder.getBeanDefinition());
+        return queueBeanName;
+    }
 
-        // binding
-        String bindingBeanName = String.format("binding_%s", suffix);
-        builder = BeanDefinitionBuilder.genericBeanDefinition(Binding.class);
-        builder.setFactoryMethodOnBean("newBinding", "rpcServerConfigurer");
-        builder.addConstructorArgReference(queueBeanName);
-        builder.addConstructorArgReference(exchangeBeanName);
-        builder.addConstructorArgValue(serverInterface.getSimpleName());
-        registry.registerBeanDefinition(bindingBeanName, builder.getBeanDefinition());
+    private static String registerBinding(BeanDefinitionRegistry registry, Class<?> serverInterface,
+                                          String queueBeanName, String exchangeBeanName) {
 
-//        // template
-//        String templateBeanName = String.format("template_%s", suffix);
-//        builder = BeanDefinitionBuilder.genericBeanDefinition(RabbitTemplate.class);
-//        builder.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR);
-//        registry.registerBeanDefinition(templateBeanName, builder.getBeanDefinition());
-
-        // exporter
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient variables of same type)
-        String exporterBeanName = String.format("exporter_%s", suffix);
-        builder = BeanDefinitionBuilder.genericBeanDefinition(AmqpInvokerServiceExporter.class);
-//        builder.addPropertyReference("amqpTemplate", templateBeanName);
-        builder.addPropertyValue("serviceInterface", serverInterface);
-        builder.addPropertyReference("service", serverBeanName);
-        builder.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
-        registry.registerBeanDefinition(exporterBeanName, builder.getBeanDefinition());
+        String bindingBeanName = formatBeanName("binding", serverInterface);
+        BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(Binding.class)
+                .setFactoryMethodOnBean("newBinding", "rpcServerConfigurer")
+                .addConstructorArgReference(queueBeanName)
+                .addConstructorArgReference(exchangeBeanName)
+                .addConstructorArgValue(serverInterface.getSimpleName())
+                .getBeanDefinition();
 
-        // listener
-        String listenerBeanName = String.format("container_%s", suffix);
-        builder = BeanDefinitionBuilder.genericBeanDefinition(SimpleMessageListenerContainer.class);
+        registry.registerBeanDefinition(bindingBeanName, beanDefinition);
+        return bindingBeanName;
+    }
+
+    private static String registerExporter(BeanDefinitionRegistry registry, Class<?> serverInterface,
+                                           String serverBeanName) {
+
+        String exporterBeanName = formatBeanName("exporter", serverInterface);
+        BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(AmqpInvokerServiceExporter.class)
+//                .addPropertyReference("amqpTemplate", templateBeanName)
+                .addPropertyValue("serviceInterface", serverInterface)
+                .addPropertyReference("service", serverBeanName)
+                .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE)
+                .getBeanDefinition();
+
+        registry.registerBeanDefinition(exporterBeanName, beanDefinition);
+        return exporterBeanName;
+
+    }
+
+    private static void registerListener(BeanDefinitionRegistry registry, Class<?> serverInterface, String queueBeanName, String exporterBeanName) {
+        String listenerBeanName = formatBeanName("container", serverInterface);
+        BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(SimpleMessageListenerContainer.class);
         builder.addPropertyReference("queues", queueBeanName); // only name of queue is needed
         builder.addPropertyReference("messageListener", exporterBeanName);
         builder.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR);
         registry.registerBeanDefinition(listenerBeanName, builder.getBeanDefinition());
+    }
+
+    private static String formatBeanName(String name, Class<?> serverInterface) {
+        String suffix = ClassUtils.getShortName(serverInterface); // TODO: support package name
+        return String.format("%s_%s", name, suffix);
     }
 
     private static Set<Class<?>> findAnnotationDeclaringInterfaces(Class<? extends Annotation> annotationType,
