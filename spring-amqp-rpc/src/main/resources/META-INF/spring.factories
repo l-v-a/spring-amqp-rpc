@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  localhost.lva.amqprpc.config.RpcServerAutoConfiguration
+  localhost.lva.amqprpc.config.RpcServerAutoConfiguration,localhost.lva.amqprpc.config.RpcClientAutoConfiguration

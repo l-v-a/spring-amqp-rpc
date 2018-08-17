@@ -7,9 +7,9 @@ import org.springframework.context.annotation.Configuration;
  * @author vlitvinenko
  */
 @Configuration
-public class RpcServerMarkerConfiguration {
+public class RpcClientMarkerConfiguration {
     @Bean
-    public Marker rpcServerMarker() {
+    public Marker rpcClientMarker() {
         return new Marker();
     }
 

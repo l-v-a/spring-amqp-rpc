@@ -25,6 +25,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static localhost.lva.amqprpc.config.RpcClientAutoConfiguration.RPC_CLIENT_TEMPLATE_BEAN_NAME;
+
 /**
  * @author vlitvinenko
  */
@@ -94,7 +96,7 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
         String beanName = ClassUtils.getShortName(clientClassName);
         BeanDefinition beanDefinition= BeanDefinitionBuilder.genericBeanDefinition(AmqpProxyFactoryBean.class)
                 .addPropertyValue("serviceInterface", clientClassName)
-//                .addPropertyReference("amqpTemplate", "template") // TODO: make configurable
+                .addPropertyReference("amqpTemplate", RPC_CLIENT_TEMPLATE_BEAN_NAME)
 //                .addPropertyValue("timeout", clientAttrs.getNumber("timeout"))
                 .addPropertyValue("routingKey", ClassUtils.getShortName(clientClassName))
                 .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE)
