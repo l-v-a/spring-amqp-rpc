@@ -3,7 +3,6 @@ package localhost.lva.amqprpc;
 import org.springframework.amqp.remoting.client.AmqpProxyFactoryBean;
 import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.context.EnvironmentAware;
@@ -98,8 +97,7 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
                 .addPropertyValue("serviceInterface", clientClassName)
                 .addPropertyReference("amqpTemplate", RPC_CLIENT_TEMPLATE_BEAN_NAME)
 //                .addPropertyValue("timeout", clientAttrs.getNumber("timeout"))
-                .addPropertyValue("routingKey", ClassUtils.getShortName(clientClassName))
-                .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE)
+                .addPropertyValue("routingKey", ClassUtils.getShortName(clientClassName)) // same as queue name (make configurable)
                 .getBeanDefinition();
         registry.registerBeanDefinition(beanName, beanDefinition);
     }

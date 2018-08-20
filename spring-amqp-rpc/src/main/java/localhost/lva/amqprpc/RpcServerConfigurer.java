@@ -22,6 +22,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static localhost.lva.amqprpc.config.RpcServerAutoConfiguration.RPC_EXCHANGE_BEAN_NAME;
+import static localhost.lva.amqprpc.config.RpcServerAutoConfiguration.RPC_TEMPLATE_BEAN_NAME;
+
 /**
  * @author vlitvinenko
  */
@@ -37,6 +40,8 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
                 Class<?> serverInterface = candidates.iterator().next();
 
                 RpcServer rpcServer = AnnotationUtils.findAnnotation(beanClass, RpcServer.class);
+                Assert.notNull(rpcServer, "Interface must be @RpcServer annotated");
+
                 Map<String, Object> attrs = AnnotationUtils.getAnnotationAttributes(rpcServer);
                 registerServer((BeanDefinitionRegistry) beanFactory, serverInterface, beanName);
             }
@@ -47,10 +52,8 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
     private void registerServer(BeanDefinitionRegistry registry,
                                 Class<?> serverInterface, String serverBeanName) {
 
-        String exchangeBeanName = "exchange"; // TODO: declare
-
         String queueBeanName = registerQueue(registry, serverInterface);
-        registerBinding(registry, serverInterface, queueBeanName, exchangeBeanName);
+        registerBinding(registry, serverInterface, queueBeanName);
         String exporterBeanName = registerExporter(registry, serverInterface, serverBeanName);
         registerListener(registry, serverInterface, queueBeanName, exporterBeanName);
     }
@@ -65,14 +68,14 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
     }
 
     private static String registerBinding(BeanDefinitionRegistry registry, Class<?> serverInterface,
-                                          String queueBeanName, String exchangeBeanName) {
+                                          String queueBeanName) {
 
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient variables of same type)
         String bindingBeanName = formatBeanName("binding", serverInterface);
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(Binding.class)
                 .setFactoryMethodOnBean("newBinding", "rpcServerConfigurer")
                 .addConstructorArgReference(queueBeanName)
-                .addConstructorArgReference(exchangeBeanName)
+                .addConstructorArgReference(RPC_EXCHANGE_BEAN_NAME)
                 .addConstructorArgValue(serverInterface.getSimpleName())
                 .getBeanDefinition();
 
@@ -85,10 +88,9 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
 
         String exporterBeanName = formatBeanName("exporter", serverInterface);
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(AmqpInvokerServiceExporter.class)
-//                .addPropertyReference("amqpTemplate", templateBeanName)
+                .addPropertyReference("amqpTemplate", RPC_TEMPLATE_BEAN_NAME)
                 .addPropertyValue("serviceInterface", serverInterface)
                 .addPropertyReference("service", serverBeanName)
-                .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE)
                 .getBeanDefinition();
 
         registry.registerBeanDefinition(exporterBeanName, beanDefinition);
