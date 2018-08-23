@@ -19,6 +19,7 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.core.type.filter.TypeFilter;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -92,14 +93,16 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
     private static void registerClient(BeanDefinitionRegistry registry, String clientClassName,
                                        AnnotationAttributes clientAttrs) {
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient on the same getShortName in different packages)
-        String beanName = ClassUtils.getShortName(clientClassName);
-        BeanDefinition beanDefinition= BeanDefinitionBuilder.genericBeanDefinition(AmqpProxyFactoryBean.class)
+        String routingKey = clientAttrs.getString("routingKey");
+        if (StringUtils.isEmpty(routingKey)) {
+            routingKey = ClassUtils.getShortName(clientClassName);
+        }
+        BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(AmqpProxyFactoryBean.class)
                 .addPropertyValue("serviceInterface", clientClassName)
                 .addPropertyReference("amqpTemplate", RPC_CLIENT_TEMPLATE_BEAN_NAME)
-//                .addPropertyValue("timeout", clientAttrs.getNumber("timeout"))
-                .addPropertyValue("routingKey", ClassUtils.getShortName(clientClassName)) // same as queue name (make configurable)
+                .addPropertyValue("routingKey", routingKey)
                 .getBeanDefinition();
-        registry.registerBeanDefinition(beanName, beanDefinition);
+        registry.registerBeanDefinition(formatProxyBeanName(clientClassName), beanDefinition);
     }
 
     @Override
@@ -122,6 +125,10 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
         };
         scanner.setResourceLoader(resourceLoader);
         return scanner;
+    }
+
+    static String formatProxyBeanName(String clientClassName) {
+        return String.format("%sProxy", ClassUtils.getShortName(clientClassName));
     }
 
     private Set<String> getBasePackages(AnnotationMetadata metadata) {

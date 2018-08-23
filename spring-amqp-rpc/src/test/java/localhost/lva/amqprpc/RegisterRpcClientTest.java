@@ -14,7 +14,9 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-
+/**
+ * @author vlitvinenko
+ */
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = RegisterRpcClientTest.Application.class)
 @DirtiesContext

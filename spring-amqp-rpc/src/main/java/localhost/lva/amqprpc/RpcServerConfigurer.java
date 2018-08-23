@@ -100,11 +100,12 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
 
     private static void registerListener(BeanDefinitionRegistry registry, Class<?> serverInterface, String queueBeanName, String exporterBeanName) {
         String listenerBeanName = formatBeanName("container", serverInterface);
-        BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(SimpleMessageListenerContainer.class);
-        builder.addPropertyReference("queues", queueBeanName); // only name of queue is needed
-        builder.addPropertyReference("messageListener", exporterBeanName);
-        builder.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR);
-        registry.registerBeanDefinition(listenerBeanName, builder.getBeanDefinition());
+        BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(SimpleMessageListenerContainer.class)
+                .addPropertyReference("queues", queueBeanName) // only name of queue is needed
+                .addPropertyReference("messageListener", exporterBeanName)
+                .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR)
+                .getBeanDefinition();
+        registry.registerBeanDefinition(listenerBeanName, beanDefinition);
     }
 
     private static String formatBeanName(String name, Class<?> serverInterface) {
