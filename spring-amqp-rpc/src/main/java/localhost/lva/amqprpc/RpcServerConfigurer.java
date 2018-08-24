@@ -13,13 +13,13 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.util.Assert;
-import org.springframework.util.ClassUtils;
+import org.springframework.util.StringUtils;
 
 import java.lang.annotation.Annotation;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 import static localhost.lva.amqprpc.config.RpcServerAutoConfiguration.RPC_EXCHANGE_BEAN_NAME;
@@ -42,41 +42,48 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
                 RpcServer rpcServer = AnnotationUtils.findAnnotation(beanClass, RpcServer.class);
                 Assert.notNull(rpcServer, "Interface must be @RpcServer annotated");
 
-                Map<String, Object> attrs = AnnotationUtils.getAnnotationAttributes(rpcServer);
-                registerServer((BeanDefinitionRegistry) beanFactory, serverInterface, beanName);
+                AnnotationAttributes attrs = AnnotationAttributes.fromMap(
+                        AnnotationUtils.getAnnotationAttributes(rpcServer));
+                registerServer((BeanDefinitionRegistry) beanFactory, serverInterface, beanName, attrs);
             }
         }
     }
 
 
-    private void registerServer(BeanDefinitionRegistry registry,
-                                Class<?> serverInterface, String serverBeanName) {
+    private void registerServer(BeanDefinitionRegistry registry, Class<?> serverInterface,
+                                String serverBeanName, AnnotationAttributes attrs) {
+
+
+        String routingKey = attrs.getString("routingKey");
+        if (StringUtils.isEmpty(routingKey)) {
+            routingKey = Formatter.formatRoutingKey(serverInterface.getName());
+        }
 
         String queueBeanName = registerQueue(registry, serverInterface);
-        registerBinding(registry, serverInterface, queueBeanName);
+        registerBinding(registry, serverInterface, queueBeanName, routingKey);
         String exporterBeanName = registerExporter(registry, serverInterface, serverBeanName);
         registerListener(registry, serverInterface, queueBeanName, exporterBeanName);
     }
 
     private static String registerQueue(BeanDefinitionRegistry registry, Class<?> serverInterface) {
         // TODO: read params from config
-        String queueBeanName = formatBeanName("queue", serverInterface);
-        BeanDefinitionBuilder builder = builder = BeanDefinitionBuilder.genericBeanDefinition(Queue.class,
+        String queueBeanName = Formatter.formatBeanName("queue", serverInterface);
+        BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(Queue.class,
                 () -> new Queue(serverInterface.getSimpleName(), true, false, false));
         registry.registerBeanDefinition(queueBeanName, builder.getBeanDefinition());
         return queueBeanName;
     }
 
     private static String registerBinding(BeanDefinitionRegistry registry, Class<?> serverInterface,
-                                          String queueBeanName) {
+                                          String queueBeanName, String routingKey) {
 
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient variables of same type)
-        String bindingBeanName = formatBeanName("binding", serverInterface);
+        String bindingBeanName = Formatter.formatBeanName("binding", serverInterface);
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(Binding.class)
                 .setFactoryMethodOnBean("newBinding", "rpcServerConfigurer")
                 .addConstructorArgReference(queueBeanName)
                 .addConstructorArgReference(RPC_EXCHANGE_BEAN_NAME)
-                .addConstructorArgValue(serverInterface.getSimpleName())
+                .addConstructorArgValue(routingKey)
                 .getBeanDefinition();
 
         registry.registerBeanDefinition(bindingBeanName, beanDefinition);
@@ -86,7 +93,7 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
     private static String registerExporter(BeanDefinitionRegistry registry, Class<?> serverInterface,
                                            String serverBeanName) {
 
-        String exporterBeanName = formatBeanName("exporter", serverInterface);
+        String exporterBeanName = Formatter.formatBeanName("exporter", serverInterface);
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(AmqpInvokerServiceExporter.class)
                 .addPropertyReference("amqpTemplate", RPC_TEMPLATE_BEAN_NAME)
                 .addPropertyValue("serviceInterface", serverInterface)
@@ -99,18 +106,13 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
     }
 
     private static void registerListener(BeanDefinitionRegistry registry, Class<?> serverInterface, String queueBeanName, String exporterBeanName) {
-        String listenerBeanName = formatBeanName("container", serverInterface);
+        String listenerBeanName = Formatter.formatBeanName("container", serverInterface);
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(SimpleMessageListenerContainer.class)
                 .addPropertyReference("queues", queueBeanName) // only name of queue is needed
                 .addPropertyReference("messageListener", exporterBeanName)
                 .setAutowireMode(AbstractBeanDefinition.AUTOWIRE_CONSTRUCTOR)
                 .getBeanDefinition();
         registry.registerBeanDefinition(listenerBeanName, beanDefinition);
-    }
-
-    private static String formatBeanName(String name, Class<?> serverInterface) {
-        String suffix = ClassUtils.getShortName(serverInterface); // TODO: support package name
-        return String.format("%s_%s", name, suffix);
     }
 
     private static Set<Class<?>> findAnnotationDeclaringInterfaces(Class<? extends Annotation> annotationType,
@@ -120,8 +122,8 @@ public class RpcServerConfigurer implements BeanFactoryPostProcessor {
         if (clazz.isInterface() && AnnotationUtils.isAnnotationDeclaredLocally(annotationType, clazz)) {
             classes.add(clazz);
         }
-        for (Class<?> itf : clazz.getInterfaces()) {
-            classes.addAll(findAnnotationDeclaringInterfaces(annotationType, itf));
+        for (Class<?> itfClass : clazz.getInterfaces()) {
+            classes.addAll(findAnnotationDeclaringInterfaces(annotationType, itfClass));
         }
         return classes;
     }

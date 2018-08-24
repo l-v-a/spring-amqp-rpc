@@ -2,6 +2,7 @@ package localhost.lva.amqprpc;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
 import org.springframework.amqp.remoting.service.AmqpInvokerServiceExporter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +25,7 @@ import static org.junit.Assert.assertSame;
 @DirtiesContext
 public class RpcServerConfigurerTest {
 
-    @RpcServer
+    @RpcServer(routingKey = "testRoutingKey")
     interface Service {}
 
     @Configuration
@@ -32,7 +33,7 @@ public class RpcServerConfigurerTest {
     @EnableRpcServer
     static class Application {
         @Bean
-        Service service() {return new Service() {};}
+        Service service() { return new Service() {}; }
     }
 
     @Autowired
@@ -49,5 +50,11 @@ public class RpcServerConfigurerTest {
         AmqpInvokerServiceExporter exporter = context.getBean(AmqpInvokerServiceExporter.class);
         assertEquals(Service.class, exporter.getServiceInterface());
         assertSame(context.getBean(Service.class), exporter.getService());
+    }
+
+    @Test
+    public void should_configure_binding_with_routing_key() {
+        Binding binding = context.getBean(Binding.class);
+        assertEquals("testRoutingKey", binding.getRoutingKey());
     }
 }

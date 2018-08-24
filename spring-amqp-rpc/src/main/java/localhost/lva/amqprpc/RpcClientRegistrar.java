@@ -95,14 +95,14 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient on the same getShortName in different packages)
         String routingKey = clientAttrs.getString("routingKey");
         if (StringUtils.isEmpty(routingKey)) {
-            routingKey = ClassUtils.getShortName(clientClassName);
+            routingKey = Formatter.formatRoutingKey(clientClassName);
         }
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(AmqpProxyFactoryBean.class)
                 .addPropertyValue("serviceInterface", clientClassName)
                 .addPropertyReference("amqpTemplate", RPC_CLIENT_TEMPLATE_BEAN_NAME)
                 .addPropertyValue("routingKey", routingKey)
                 .getBeanDefinition();
-        registry.registerBeanDefinition(formatProxyBeanName(clientClassName), beanDefinition);
+        registry.registerBeanDefinition(Formatter.formatProxyBeanName(clientClassName), beanDefinition);
     }
 
     @Override
@@ -125,10 +125,6 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
         };
         scanner.setResourceLoader(resourceLoader);
         return scanner;
-    }
-
-    static String formatProxyBeanName(String clientClassName) {
-        return String.format("%sProxy", ClassUtils.getShortName(clientClassName));
     }
 
     private Set<String> getBasePackages(AnnotationMetadata metadata) {

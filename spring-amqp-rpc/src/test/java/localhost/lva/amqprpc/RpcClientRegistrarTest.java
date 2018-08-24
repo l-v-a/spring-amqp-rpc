@@ -11,9 +11,9 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.util.ClassUtils;
 
-import static localhost.lva.amqprpc.RpcClientRegistrar.formatProxyBeanName;
+import static localhost.lva.amqprpc.Formatter.formatProxyBeanName;
+import static localhost.lva.amqprpc.Formatter.formatRoutingKey;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -54,6 +54,6 @@ public class RpcClientRegistrarTest {
     public void should_configure_default_routing_key() {
         String clientClassName = ServiceDefault.class.getName();
         BeanDefinition beanDefinition = beanFactory.getBeanDefinition(formatProxyBeanName(clientClassName));
-        assertEquals(ClassUtils.getShortName(clientClassName), beanDefinition.getPropertyValues().get("routingKey"));
+        assertEquals(formatRoutingKey(clientClassName), beanDefinition.getPropertyValues().get("routingKey"));
     }
 }
