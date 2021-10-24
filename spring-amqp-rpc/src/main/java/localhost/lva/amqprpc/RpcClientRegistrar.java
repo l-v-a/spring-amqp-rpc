@@ -21,10 +21,14 @@ import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static java.util.stream.Collectors.toSet;
+import static localhost.lva.amqprpc.Formatter.formatProxyBeanName;
+import static localhost.lva.amqprpc.Formatter.formatRoutingKey;
 import static localhost.lva.amqprpc.config.RpcClientAutoConfiguration.RPC_CLIENT_TEMPLATE_BEAN_NAME;
 
 /**
@@ -35,6 +39,7 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
 
     private static final AnnotationTypeFilter CLIENT_ANNOTATION_TYPE_FILTER =
             new AnnotationTypeFilter(RpcClient.class);
+    private static final Class<?>[] CLASSES_EMPTY_ARRAY = new Class<?>[0];
     private Environment environment;
     private ResourceLoader resourceLoader;
 
@@ -45,33 +50,9 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
         AnnotationAttributes attributes = AnnotationAttributes.fromMap(metadata
                 .getAnnotationAttributes(EnableRpcClients.class.getName()));
 
-        Set<String> basePackages = null;
-        Class<?>[] clients = attributes != null ? attributes.getClassArray("clients") : null;
+        Class<?>[] clients = attributes != null ? attributes.getClassArray("clients") : CLASSES_EMPTY_ARRAY;
         ClassPathScanningCandidateComponentProvider scanner = getScanner();
-
-        if (clients == null || clients.length == 0) {
-            // auto-scan
-            scanner.addIncludeFilter(CLIENT_ANNOTATION_TYPE_FILTER);
-            basePackages = getBasePackages(metadata);
-        } else {
-            // TODO: think about and rewrite (we don't needed this path if we finally interested only in class names)
-            Set<String> clientClasses = new HashSet<>();
-            basePackages = new HashSet<>();
-            for (Class<?> clazz : clients) {
-                basePackages.add(ClassUtils.getPackageName(clazz));
-                clientClasses.add(clazz.getCanonicalName());
-            }
-
-            AbstractClassTestingTypeFilter filter = new AbstractClassTestingTypeFilter() {
-                @Override
-                protected boolean match(ClassMetadata metadata) {
-                    String cleaned = metadata.getClassName().replaceAll("\\$", ".");
-                    return clientClasses.contains(cleaned);
-                }
-            };
-
-            scanner.addIncludeFilter(TypeFilters.and(filter, CLIENT_ANNOTATION_TYPE_FILTER));
-        }
+        Set<String> basePackages = getBasePackages(metadata, clients, scanner);
 
         Stream<AnnotatedBeanDefinition> beanDefinitions = basePackages.stream()
                 .flatMap(basePackage -> scanner.findCandidateComponents(basePackage).stream())
@@ -85,9 +66,36 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
 
             AnnotationAttributes clientAttrs = AnnotationAttributes.fromMap(
                     annotationMetadata.getAnnotationAttributes(RpcClient.class.getName()));
-
+            Assert.notNull(clientAttrs, "@RpcClient expected");
             registerClient(registry, annotationMetadata.getClassName(), clientAttrs);
         });
+    }
+
+    private Set<String> getBasePackages(AnnotationMetadata metadata,
+                                        Class<?>[] clients,
+                                        ClassPathScanningCandidateComponentProvider scanner) {
+        if (clients.length == 0) {
+            // auto-scan
+            scanner.addIncludeFilter(CLIENT_ANNOTATION_TYPE_FILTER);
+            return getBasePackages(metadata);
+        }
+
+        // TODO: think about and rewrite (we don't needed this path if we finally interested only in class names)
+        Set<String> clientClasses = Arrays.stream(clients)
+                .map(Class::getCanonicalName).collect(toSet());
+        Set<String> basePackages = Arrays.stream(clients)
+                .map(ClassUtils::getPackageName).collect(toSet());
+
+        AbstractClassTestingTypeFilter filter = new AbstractClassTestingTypeFilter() {
+            @Override
+            protected boolean match(ClassMetadata metadata) {
+                String cleaned = metadata.getClassName().replaceAll("\\$", ".");
+                return clientClasses.contains(cleaned);
+            }
+        };
+
+        scanner.addIncludeFilter(TypeFilters.and(filter, CLIENT_ANNOTATION_TYPE_FILTER));
+        return basePackages;
     }
 
     private static void registerClient(BeanDefinitionRegistry registry, String clientClassName,
@@ -95,14 +103,14 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
         // TODO: think about if bean with name already exists (e.g. multiple @RpcClient on the same getShortName in different packages)
         String routingKey = clientAttrs.getString("routingKey");
         if (StringUtils.isEmpty(routingKey)) {
-            routingKey = Formatter.formatRoutingKey(clientClassName);
+            routingKey = formatRoutingKey(clientClassName);
         }
         BeanDefinition beanDefinition = BeanDefinitionBuilder.genericBeanDefinition(AmqpProxyFactoryBean.class)
                 .addPropertyValue("serviceInterface", clientClassName)
                 .addPropertyReference("amqpTemplate", RPC_CLIENT_TEMPLATE_BEAN_NAME)
                 .addPropertyValue("routingKey", routingKey)
                 .getBeanDefinition();
-        registry.registerBeanDefinition(Formatter.formatProxyBeanName(clientClassName), beanDefinition);
+        registry.registerBeanDefinition(formatProxyBeanName(clientClassName), beanDefinition);
     }
 
     @Override

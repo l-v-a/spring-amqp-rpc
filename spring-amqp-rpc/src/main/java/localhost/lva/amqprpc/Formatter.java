@@ -5,6 +5,7 @@ import org.springframework.util.ClassUtils;
 /**
  * @author vlitvinenko
  */
+// TODO: remove
 class Formatter {
     private Formatter() {}
 
