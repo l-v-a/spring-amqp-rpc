@@ -40,6 +40,7 @@ public class RpcClientRegistrar implements ImportBeanDefinitionRegistrar,
     private static final AnnotationTypeFilter CLIENT_ANNOTATION_TYPE_FILTER =
             new AnnotationTypeFilter(RpcClient.class);
     private static final Class<?>[] CLASSES_EMPTY_ARRAY = new Class<?>[0];
+
     private Environment environment;
     private ResourceLoader resourceLoader;
 
