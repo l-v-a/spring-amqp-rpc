@@ -1,1 +1,1 @@
-# spring-amqp-rpc
+# TODO: add description
